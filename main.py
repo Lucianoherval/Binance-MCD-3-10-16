@@ -14,10 +14,10 @@ inicializar_csv()
 # ⚙️ CONFIGURAÇÕES DA ESTRATÉGIA DCA
 # ==========================================
 
-MAX_COMPRAS = 7                     # Máximo de entradas na mesma moeda (ex: 1 compra principal + 3 recompras)
+MAX_COMPRAS = 5                   # Máximo de entradas na mesma moeda (ex: 1 compra principal + 3 recompras)
 DISTANCIA_MINIMA_QUEDA = 0.02       # O preço deve cair pelo menos 2% (0.02) em relação à última compra para recomprar
 LUCRO_MINIMO_PERCENTUAL = 0.05      # Lucro mínimo desejado (0.05%) sobre o PREÇO MÉDIO para vender tudo
-FRACAO_CAPITAL = 0.13               # Usa 25% do capital disponível na conta para cada "lote" de compra
+FRACAO_CAPITAL = 0.19               # Usa 25% do capital disponível na conta para cada "lote" de compra
 
 # ==========================================
 # 🧠 VARIÁVEIS DE ESTADO (Memória do Bot)
@@ -88,7 +88,8 @@ while True:
                 if valor_da_ordem < 15:
                     print(f"[{datetime.now()}] 💸 Saldo BRL insuficiente para a compra {num_compras + 1} (R${valor_da_ordem:.2f}).")
                 else:
-                    qtd_btc = math.floor((valor_da_ordem / preco_mercado) * 100000) / 100000.0
+                    # qtd_btc = math.floor((valor_da_ordem / preco_mercado) * 100000) / 100000.0
+                    qtd_btc = round((valor_da_ordem / preco_mercado), 5)
                     
                     # 🛒 EXECUTA A COMPRA NA BINANCE
                     binance.create_market_buy_order(PAR, qtd_btc)
@@ -145,4 +146,4 @@ while True:
         print(f"[{datetime.now()}] ⚠️ Erro no ciclo: {e}")
 
     # Pausa antes da próxima checagem
-    time.sleep(180)
+    time.sleep(60)
