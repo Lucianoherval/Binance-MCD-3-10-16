@@ -1,11 +1,29 @@
 import time
 import pandas as pd
 import math
+import requests
+import json
+import os
 from datetime import datetime
 from binance_trader import conectar_binance, buscar_ohlcv
 from indicadores import calcular_macd
 from registro import inicializar_csv, registrar_operacao
-from config import PAR, INTERVALO
+from config import PAR, INTERVALO, TELEGRAM_CHAT_ID, TELEGRAM_TOKEN
+
+# ==========================================
+# 📱 ALERTA TELEGRAM
+# ==========================================
+def enviar_telegram(mensagem):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": mensagem,
+        "parse_mode": "HTML" 
+    }
+    try:
+        requests.post(url, data=payload, timeout=5)
+    except Exception as e:
+        print(f"⚠️ Erro ao enviar notificação para o Telegram: {e}")
 
 binance = conectar_binance()
 inicializar_csv()
@@ -13,21 +31,50 @@ inicializar_csv()
 # ==========================================
 # ⚙️ CONFIGURAÇÕES DA ESTRATÉGIA DCA
 # ==========================================
+INVESTIMENTO_INICIAL = 100.00       # 💰 SEU BOLO TOTAL: O valor exato que o bot vai fatiar
+MAX_COMPRAS = 5                     # 🔪 QUANTIDADE DE FATIAS: Dividirá o bolo por esse número (Ex: 100 / 5 = 20 por entrada)
 
-MAX_COMPRAS = 5                   # Máximo de entradas na mesma moeda (ex: 1 compra principal + 3 recompras)
-DISTANCIA_MINIMA_QUEDA = 0.02       # O preço deve cair pelo menos 2% (0.02) em relação à última compra para recomprar
-LUCRO_MINIMO_PERCENTUAL = 0.05      # Lucro mínimo desejado (0.05%) sobre o PREÇO MÉDIO para vender tudo
-FRACAO_CAPITAL = 0.19               # Usa 25% do capital disponível na conta para cada "lote" de compra
+DISTANCIA_MINIMA_QUEDA = 0.02       # O preço deve cair pelo menos 2%
+LUCRO_MINIMO_PERCENTUAL = 0.05      # Lucro mínimo desejado (0.05%) sobre o PREÇO MÉDIO
 
 # ==========================================
-# 🧠 VARIÁVEIS DE ESTADO (Memória do Bot)
+# 🧠 MEMÓRIA DO BOT (CÉREBRO JSON)
 # ==========================================
+ARQUIVO_MEMORIA = "memoria_bot.json"
+
+def salvar_memoria(estado):
+    with open(ARQUIVO_MEMORIA, "w") as f:
+        json.dump(estado, f)
+
+def carregar_memoria():
+    if os.path.exists(ARQUIVO_MEMORIA):
+        with open(ARQUIVO_MEMORIA, "r") as f:
+            return json.load(f)
+    return None
+
+# Inicializando as variáveis padrão
 posicao_aberta = False
 num_compras = 0
 total_investido = 0.0
 total_qtd_comprada = 0.0
 ultimo_preco_compra = 0.0
 preco_medio = 0.0
+capital_operacional = INVESTIMENTO_INICIAL # Essa variável cresce com os lucros
+contador_telegram = 0
+
+# Tentando carregar a memória se o bot foi reiniciado
+memoria_salva = carregar_memoria()
+if memoria_salva:
+    posicao_aberta = memoria_salva.get("posicao_aberta", False)
+    num_compras = memoria_salva.get("num_compras", 0)
+    total_investido = memoria_salva.get("total_investido", 0.0)
+    total_qtd_comprada = memoria_salva.get("total_qtd_comprada", 0.0)
+    ultimo_preco_compra = memoria_salva.get("ultimo_preco_compra", 0.0)
+    preco_medio = memoria_salva.get("preco_medio", 0.0)
+    capital_operacional = memoria_salva.get("capital_operacional", INVESTIMENTO_INICIAL)
+    
+    if posicao_aberta:
+        print(f"💾 Memória recuperada! O bot lembra que tem {num_compras} compra(s) aberta(s). Preço Médio: R${preco_medio:.2f}")
 
 try:
     teste = buscar_ohlcv(binance, PAR, INTERVALO, limite=10)
@@ -52,8 +99,8 @@ while True:
         df = calcular_macd(df)
         df.dropna(inplace=True)
 
-        atual = df.iloc[-1]
-        anterior = df.iloc[-2]
+        atual = df.iloc[-2]
+        anterior = df.iloc[-3]
 
         dif_atual = atual['MACD_3_10_16']
         dea_atual = atual['MACDs_3_10_16']
@@ -71,25 +118,26 @@ while True:
         if cruzamento_compra and num_compras < MAX_COMPRAS:
             distancia_ok = True
             
-            # Se já comprou antes, exige que o preço tenha caído para valer a pena baixar o preço médio
             if num_compras > 0:
                 preco_alvo_recompra = ultimo_preco_compra * (1 - DISTANCIA_MINIMA_QUEDA)
                 if preco_mercado > preco_alvo_recompra:
                     distancia_ok = False
-                    print(f"[{datetime.now()}] ⏳ MACD cruzou compra, mas a queda foi fraca. Preço (R${preco_mercado:.2f}) não atingiu o alvo de recompra (R${preco_alvo_recompra:.2f}).")
+                    print(f"[{datetime.now()}] ⏳ MACD cruzou compra, mas a queda foi fraca. Preço (R${preco_mercado:.2f}) não atingiu o alvo (R${preco_alvo_recompra:.2f}).")
 
             if distancia_ok:
                 brl_balance = binance.fetch_balance().get('total', {}).get('BRL', 0)
                 
-                # Define o valor da ordem. Se for a 1ª compra, usa a fração do saldo. Se for recompra, usa o mesmo lote inicial.
-                valor_da_ordem = (brl_balance * FRACAO_CAPITAL) if num_compras == 0 else (total_investido / num_compras)
-                valor_da_ordem = min(valor_da_ordem, brl_balance) 
+                # 🛠️ A NOVA MATEMÁTICA DA DIVISÃO (Ex: 100 / 5 = 20)
+                valor_da_ordem = capital_operacional / MAX_COMPRAS
 
-                if valor_da_ordem < 15:
-                    print(f"[{datetime.now()}] 💸 Saldo BRL insuficiente para a compra {num_compras + 1} (R${valor_da_ordem:.2f}).")
+                if valor_da_ordem > brl_balance:
+                    print(f"[{datetime.now()}] 💸 Saldo BRL livre na corretora (R${brl_balance:.2f}) é insuficiente para a fatia de R${valor_da_ordem:.2f}.")
+                elif valor_da_ordem < 10:
+                    print(f"[{datetime.now()}] 💸 A fatia calculada (R${valor_da_ordem:.2f}) é menor que o limite da Binance (R$10.00). Aumente o INVESTIMENTO_INICIAL.")
                 else:
-                    # qtd_btc = math.floor((valor_da_ordem / preco_mercado) * 100000) / 100000.0
-                    qtd_btc = round((valor_da_ordem / preco_mercado), 5)
+                    # Cálculo seguro do Bitcoin
+                    qtd_btc = math.floor((valor_da_ordem / preco_mercado) * 100000) / 100000.0
+                    valor_real_gasto = qtd_btc * preco_mercado
                     
                     # 🛒 EXECUTA A COMPRA NA BINANCE
                     binance.create_market_buy_order(PAR, qtd_btc)
@@ -97,23 +145,37 @@ while True:
                     # Atualiza a Memória do Bot
                     num_compras += 1
                     total_qtd_comprada += qtd_btc
-                    total_investido += valor_da_ordem
+                    total_investido += valor_real_gasto 
                     preco_medio = total_investido / total_qtd_comprada
                     ultimo_preco_compra = preco_mercado
                     posicao_aberta = True
 
+                    # 💾 Salva o estado atual no Cérebro (JSON)
+                    salvar_memoria({
+                        "posicao_aberta": posicao_aberta,
+                        "num_compras": num_compras,
+                        "total_investido": total_investido,
+                        "total_qtd_comprada": total_qtd_comprada,
+                        "ultimo_preco_compra": ultimo_preco_compra,
+                        "preco_medio": preco_medio,
+                        "capital_operacional": capital_operacional
+                    })
+
                     registrar_operacao([
-                        datetime.now().strftime("%Y-%m-%d %H:%M:%S"), f"COMPRA {num_compras}", preco_mercado, qtd_btc, "", "", "", valor_da_ordem
+                        datetime.now().strftime("%Y-%m-%d %H:%M:%S"), f"COMPRA {num_compras}", preco_mercado, qtd_btc, "", "", "", valor_real_gasto
                     ])
                     
                     print(f"[{datetime.now()}] ✅ COMPRA {num_compras}/{MAX_COMPRAS}: {qtd_btc} BTC a R${preco_mercado:.2f}")
                     print(f"📊 NOVO PREÇO MÉDIO: R${preco_medio:.2f} | Total Investido: R${total_investido:.2f}")
 
+                    # 📱 Alerta Telegram
+                    msg_compra = f"🛒 <b>COMPRA EXECUTADA ({num_compras}/{MAX_COMPRAS})</b>\n\n<b>Par:</b> {PAR}\n<b>Quantidade:</b> {qtd_btc} BTC\n<b>Preço:</b> R$ {preco_mercado:.2f}\n<b>Investido:</b> R$ {valor_real_gasto:.2f}\n\n📊 <b>Novo Preço Médio:</b> R$ {preco_medio:.2f}"
+                    enviar_telegram(msg_compra)
+
         # ==========================================
         # 🔴 LÓGICA DE VENDA (Saída Total com Lucro)
         # ==========================================
         elif posicao_aberta and cruzamento_venda:
-            # A regra principal muda: O bot tenta vender acima do PREÇO MÉDIO, não da última compra!
             if preco_mercado > preco_medio:
                 valor_total_venda = total_qtd_comprada * preco_mercado
                 lucro = valor_total_venda - total_investido
@@ -130,20 +192,50 @@ while True:
                     print(f"[{datetime.now()}] 💰 VENDA TOTAL: {total_qtd_comprada} BTC a R${preco_mercado:.2f}")
                     print(f"🎉 LUCRO GARANTIDO: R${lucro:.2f} ({lucro_percentual:.2f}%)")
                     
-                    # 🧹 Reseta o bot para o próximo ciclo de operações
+                    # 📈 Juros Compostos: Soma o lucro ao bolo total
+                    capital_operacional += lucro
+                    print(f"🏦 Novo Capital Operacional para o próximo ciclo: R${capital_operacional:.2f}")
+
+                    # 📱 Alerta Telegram
+                    msg_venda = f"💰 <b>VENDA COM LUCRO!</b>\n\n<b>Par:</b> {PAR}\n<b>Preço de Saída:</b> R$ {preco_mercado:.2f}\n🎉 <b>LUCRO:</b> R$ {lucro:.2f} ({lucro_percentual:.2f}%)\n🏦 <b>Novo Capital:</b> R$ {capital_operacional:.2f}"
+                    enviar_telegram(msg_venda)
+                    
+                    # 🧹 Reseta o bot e apaga a memória
                     posicao_aberta = False
                     num_compras = 0
                     total_investido = 0.0
                     total_qtd_comprada = 0.0
                     ultimo_preco_compra = 0.0
                     preco_medio = 0.0
+                    
+                    salvar_memoria({
+                        "posicao_aberta": False, "num_compras": 0, "total_investido": 0.0, 
+                        "total_qtd_comprada": 0.0, "ultimo_preco_compra": 0.0, "preco_medio": 0.0, 
+                        "capital_operacional": capital_operacional # Salva o bolo gordo para a próxima vez
+                    })
                 else:
                     print(f"[{datetime.now()}] ⏳ Venda ignorada: Lucro de {lucro_percentual:.2f}% não atingiu o mínimo ({LUCRO_MINIMO_PERCENTUAL}%).")
             else:
-                print(f"[{datetime.now()}] 🛑 Sinal de venda do MACD, mas o preço (R${preco_mercado:.2f}) está abaixo do seu PREÇO MÉDIO (R${preco_medio:.2f}). Segurando a moeda...")
+                print(f"[{datetime.now()}] 🛑 Sinal de venda, mas o preço (R${preco_mercado:.2f}) está abaixo do seu PREÇO MÉDIO (R${preco_medio:.2f}).")
 
     except Exception as e:
         print(f"[{datetime.now()}] ⚠️ Erro no ciclo: {e}")
+    
+    # ==========================================
+    # 🖥️ PAINEL DE STATUS E AVISO TELEGRAM
+    # ==========================================
+    if posicao_aberta:
+        msg_status = f"📊 STATUS | Preço Atual: R${preco_mercado:.2f} | Seu Preço Médio: R${preco_medio:.2f} | Lotes: {num_compras}/{MAX_COMPRAS}"
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg_status}")
+    else:
+        msg_busca = f"🔎 BUSCANDO OPORTUNIDADES | Preço Atual: R${preco_mercado:.2f} | Bolo Atual: R${capital_operacional:.2f}"
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg_busca}")
+        
+        # Avisa no Telegram a cada ~1 hora
+        contador_telegram += 1
+        if contador_telegram >= 34: 
+            enviar_telegram(msg_busca)
+            contador_telegram = 0   
 
     # Pausa antes da próxima checagem
-    time.sleep(60)
+    time.sleep(67)
