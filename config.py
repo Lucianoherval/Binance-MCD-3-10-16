@@ -8,3 +8,6 @@ BINANCE_API_SECRET = os.getenv('BINANCE_API_SECRET')
 PAR = 'BTC/BRL'
 INTERVALO = '5m'
 CSV_PATH = 'dados/operacoes.csv'
+
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
+TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
