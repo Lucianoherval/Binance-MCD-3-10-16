@@ -183,7 +183,9 @@ while True:
 
                 if lucro_percentual >= LUCRO_MINIMO_PERCENTUAL:
                     # 🛒 EXECUTA A VENDA DE TUDO
-                    binance.create_market_sell_order(PAR, total_qtd_comprada)
+                    btc_balance = binance.fetch_balance().get('total', {}).get('BTC', 0.0)
+                    qtd_para_venda = min(total_qtd_comprada, brl_balance)
+                    binance.create_market_sell_order(PAR, qtd_para_venda)
                     
                     registrar_operacao([
                         datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "VENDA TOTAL", "", total_qtd_comprada, preco_mercado, valor_total_venda, lucro, total_investido
