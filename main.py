@@ -31,11 +31,11 @@ inicializar_csv()
 # ==========================================
 # ⚙️ CONFIGURAÇÕES DA ESTRATÉGIA DCA
 # ==========================================
-INVESTIMENTO_INICIAL = 100.00       # 💰 SEU BOLO TOTAL: O valor exato que o bot vai fatiar
-MAX_COMPRAS = 5                     # 🔪 QUANTIDADE DE FATIAS: Dividirá o bolo por esse número (Ex: 100 / 5 = 20 por entrada)
+INVESTIMENTO_INICIAL = 200.00         # 💰 SEU BOLO TOTAL: O valor exato que o bot vai fatiar
+MAX_COMPRAS = 4                    # 🔪 QUANTIDADE DE FATIAS: Dividirá o bolo por esse número (Ex: 100 / 5 = 20 por entrada)
 
 DISTANCIA_MINIMA_QUEDA = 0.02       # O preço deve cair pelo menos 2%
-LUCRO_MINIMO_PERCENTUAL = 0.05      # Lucro mínimo desejado (0.05%) sobre o PREÇO MÉDIO
+LUCRO_MINIMO_PERCENTUAL = 0.15      # Lucro mínimo desejado (0.05%) sobre o PREÇO MÉDIO
 
 # ==========================================
 # 🧠 MEMÓRIA DO BOT (CÉREBRO JSON)
