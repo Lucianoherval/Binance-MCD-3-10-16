@@ -34,8 +34,8 @@ inicializar_csv()
 INVESTIMENTO_INICIAL = 200.00         # 💰 SEU BOLO TOTAL: O valor exato que o bot vai fatiar
 MAX_COMPRAS = 4                    # 🔪 QUANTIDADE DE FATIAS: Dividirá o bolo por esse número (Ex: 100 / 5 = 20 por entrada)
 
-DISTANCIA_MINIMA_QUEDA = 0.02       # O preço deve cair pelo menos 2%
-LUCRO_MINIMO_PERCENTUAL = 0.15      # Lucro mínimo desejado (0.05%) sobre o PREÇO MÉDIO
+DISTANCIA_MINIMA_QUEDA = 0.019       # O preço deve cair pelo menos 2%
+LUCRO_MINIMO_PERCENTUAL = 0.16      # Lucro mínimo desejado (0.05%) sobre o PREÇO MÉDIO
 
 # ==========================================
 # 🧠 MEMÓRIA DO BOT (CÉREBRO JSON)
@@ -99,8 +99,8 @@ while True:
         df = calcular_macd(df)
         df.dropna(inplace=True)
 
-        atual = df.iloc[-2]
-        anterior = df.iloc[-3]
+        atual = df.iloc[-1]
+        anterior = df.iloc[-2]
 
         dif_atual = atual['MACD_3_10_16']
         dea_atual = atual['MACDs_3_10_16']
@@ -234,10 +234,13 @@ while True:
         print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg_busca}")
         
         # Avisa no Telegram a cada ~1 hora
-        contador_telegram += 1
-        if contador_telegram >= 34: 
+    contador_telegram += 1
+    if contador_telegram >= 63: 
+        if posicao_aberta:
+            enviar_telegram(msg_status)
+        else:
             enviar_telegram(msg_busca)
-            contador_telegram = 0   
+        contador_telegram = 0   
 
     # Pausa antes da próxima checagem
-    time.sleep(67)
+    time.sleep(69)
