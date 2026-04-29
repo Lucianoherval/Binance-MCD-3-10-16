@@ -1,1 +1,27 @@
-{"posicao_aberta": true, "num_compras": 1, "total_investido": 47.42816, "total_qtd_comprada": 0.00013, "ultimo_preco_compra": 364832.0, "preco_medio": 364832.0, "capital_operacional": 200.37492}
+{
+  "capital_operacional": 416.91,
+  "capital_alocado": 822.73,
+  "lotes": [
+    {
+      "id": 1,
+      "status": "aberto",
+      "preco_compra": 393000.0,
+      "quantidade": 0.00105,
+      "valor_investido": 412.65
+    },
+    {
+      "id": 2,
+      "status": "aberto",
+      "preco_compra": 383256.0,
+      "quantidade": 0.00107,
+      "valor_investido": 410.08
+    },
+    {
+      "id": 3,
+      "status": "livre",
+      "preco_compra": 0.0,
+      "quantidade": 0.0,
+      "valor_investido": 0.0
+    }
+  ]
+}

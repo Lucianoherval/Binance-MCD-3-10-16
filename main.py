@@ -29,18 +29,21 @@ binance = conectar_binance()
 inicializar_csv()
 
 # ==========================================
-# ⚙️ CONFIGURAÇÕES DA ESTRATÉGIA DCA
+# ⚙️ CONFIGURAÇÕES DA ESTRATÉGIA DE LOTES (BINANCE)
 # ==========================================
-INVESTIMENTO_INICIAL = 200.00         # 💰 SEU BOLO TOTAL: O valor exato que o bot vai fatiar
-MAX_COMPRAS = 4                    # 🔪 QUANTIDADE DE FATIAS: Dividirá o bolo por esse número (Ex: 100 / 5 = 20 por entrada)
+INVESTIMENTO_INICIAL = 1239.64       # 💰 INVESTIMENTO TOTAL
+MAX_COMPRAS = 3                     # 🔪 QUANTIDADE DE OPERAÇÕES
 
-DISTANCIA_MINIMA_QUEDA = 0.019       # O preço deve cair pelo menos 2%
-LUCRO_MINIMO_PERCENTUAL = 0.16      # Lucro mínimo desejado (0.05%) sobre o PREÇO MÉDIO
+DISTANCIA_MINIMA_QUEDA = 0.019      # O preço deve cair pelo menos 2%
+LUCRO_MINIMO_PERCENTUAL = 0.069      # Lucro mínimo desejadO
 
 # ==========================================
 # 🧠 MEMÓRIA DO BOT (CÉREBRO JSON)
 # ==========================================
 ARQUIVO_MEMORIA = "memoria_bot.json"
+
+def lotes_padrao():
+    return [{"id": i + 1, "status": "livre", "preco_compra": 0.0, "quantidade": 0.0} for i in range(MAX_COMPRAS)]
 
 def salvar_memoria(estado):
     with open(ARQUIVO_MEMORIA, "w") as f:
@@ -49,8 +52,15 @@ def salvar_memoria(estado):
 def carregar_memoria():
     if os.path.exists(ARQUIVO_MEMORIA):
         with open(ARQUIVO_MEMORIA, "r") as f:
-            return json.load(f)
-    return None
+            dados = json.load(f)
+        if "lotes" not in dados or len(dados["lotes"]) != MAX_COMPRAS:
+            dados["lotes"] = lotes_padrao()
+        if "capital_operational" not in dados:
+            dados["capital_operational"] = INVESTIMENTO_INICIAL
+        if "capital_alocado" not in dados:
+            dados["capital_alocado"] = sum(l["valor_investido"] for l in dados["lotes"] if l["status"] == "aberto")
+        return dados
+
 
 # Inicializando as variáveis padrão
 posicao_aberta = False
