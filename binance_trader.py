@@ -6,8 +6,11 @@ def conectar_binance():
         'apiKey': BINANCE_API_KEY,
         'secret': BINANCE_API_SECRET,
         'enableRateLimit': True,
+        'hostname': 'api.binance.com',
         'options': {
-            'adjustForTimeDifference': True  # <- ADICIONE ESSA LINHA
+            'adjustForTimeDifference': True,
+            'defaultType': 'spot',
+            'fetchCurrencies': False,
         }
     })
 

@@ -1,8 +1,14 @@
+# indicadores.py
 import pandas as pd
-import pandas_ta as ta
 
 def calcular_macd(df):
-    #Adiciona as colunas automaticamente ao DATA
-    #Cria o MACD em 30,1,16 - MACDh 3,10,16(Histog) - MACDs 3,10,16(Sinal)
-    df.ta.macd(close='close', fast=3, slow=10, signal=16, append=True)
+    fast, slow, signal = 3, 10, 16
+
+    ema_fast = df['close'].ewm(span=fast, adjust=False).mean()
+    ema_slow = df['close'].ewm(span=slow, adjust=False).mean()
+
+    df['MACD_3_10_16'] = ema_fast - ema_slow
+    df['MACDs_3_10_16'] = df['MACD_3_10_16'].ewm(span=signal, adjust=False).mean()
+    df['MACDh_3_10_16'] = df['MACD_3_10_16'] - df['MACDs_3_10_16']
+
     return df
